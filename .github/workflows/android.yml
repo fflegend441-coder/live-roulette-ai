@@ -25,7 +25,6 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           accept-android-sdk-licenses: true
-          log-accepted-android-sdk-licenses: true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -35,6 +34,25 @@ jobs:
           mkdir -p extracted
           unzip -q live_roulette_ai_android_starter.zip -d extracted
 
+      - name: Fix Java Kotlin Version
+        run: |
+          cd extracted/live_roulette_ai_starter
+          cat >> app/build.gradle <<'EOF'
+
+          android {
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+
+          tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          }
+          EOF
+
       - name: Build APK
         run: |
           gradle -p extracted/live_roulette_ai_starter assembleDebug
@@ -43,6 +61,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Live-Roulette-AI-APK
-          path: extracted/live_roulette_ai_starter/**/build/outputs/apk/debug/*.apk
+          path: extracted/live_roulette_ai_starter/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
 
