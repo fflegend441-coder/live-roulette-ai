@@ -25,9 +25,9 @@ jobs:
           java-version: '17'
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
-          packages: 'platform-tools'
+          accept-android-sdk-licenses: true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -37,31 +37,34 @@ jobs:
       - name: Extract Android Project
         run: |
           mkdir -p extracted
-          ZIP_FILE="$(find . -name 'ImmersiveRouletteAI.zip' -print -quit)"
+          ZIP_FILE="$(find . -type f -iname '*.zip' -print -quit)"
+          echo "Found ZIP: $ZIP_FILE"
           test -n "$ZIP_FILE"
           unzip -q "$ZIP_FILE" -d extracted
-          PROJECT_DIR="extracted/ImmersiveRouletteAI"
-          test -f "$PROJECT_DIR/settings.gradle"
+          SETTINGS_FILE="$(find extracted -type f \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \) -print -quit)"
+          test -n "$SETTINGS_FILE"
+          PROJECT_DIR="$(dirname "$SETTINGS_FILE")"
           test -f "$PROJECT_DIR/app/build.gradle"
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"T_DDTT_DI
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Verify Android Project
+        run: |
+          test -f "$PROJECT_DIR/settings.gradle" || test -f "$PROJECT_DIR/settings.gradle.kts"
+          test -f "$PROJECT_DIR/app/build.gradle"
+          test -f "$PROJECT_DIR/app/src/main/AndroidManifest.xml"
 
       - name: Build Debug APK
         run: |
           gradle -p "$PROJECT_DIR" assembleDebug --stacktrace
 
       - name: Verify APK
-        id: verify
         run: |
-          APK_PATH="$(find "$PROJECT_DIR/app/build/outputs/apk" -name '*.apk' | head -n 1)"
-          test -n "$APK_PATH"
-          echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
+          ls -lh "$PROJECT_DIR/app/build/outputs/apk/debug/"
+          test -f "$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Immersive-Roulette-APK
-          path: ${{ steps.verify.outputs.apk_path }}
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-
-
-
