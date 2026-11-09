@@ -26,22 +26,26 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
-        with:
-          accept-android-sdk-licenses: true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Extract Android Project
+      - name: Extract Correct Android Project
         run: |
           mkdir -p extracted
-          ZIP_FILE="$(find . -type f -iname '*.zip' -print -quit)"
-          echo "Found ZIP: $ZIP_FILE"
-          test -n "$ZIP_FILE"
+          ZIP_FILE="ImmersiveRouletteAI.zip"
+          if [ ! -f "$ZIP_FILE" ]; then
+            ZIP_FILE="live-roulette-ai-main-fixed.zip"
+          fi
+          if [ ! -f "$ZIP_FILE" ]; then
+            echo "Correct project ZIP not found"
+            ls -la
+            exit 1
+          fi
           unzip -q "$ZIP_FILE" -d extracted
-          SETTINGS_FILE="$(find extracted -type f \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \) -print -quit)"
+          SETTINGS_FILE=$(find extracted -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit)
           test -n "$SETTINGS_FILE"
           PROJECT_DIR="$(dirname "$SETTINGS_FILE")"
           test -f "$PROJECT_DIR/app/build.gradle"
@@ -54,13 +58,7 @@ jobs:
           test -f "$PROJECT_DIR/app/src/main/AndroidManifest.xml"
 
       - name: Build Debug APK
-        run: |
-          gradle -p "$PROJECT_DIR" assembleDebug --stacktrace
-
-      - name: Verify APK
-        run: |
-          ls -lh "$PROJECT_DIR/app/build/outputs/apk/debug/"
-          test -f "$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk"
+        run: gradle -p "$PROJECT_DIR" assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
