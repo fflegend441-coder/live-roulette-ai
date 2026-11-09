@@ -1,7 +1,7 @@
-
 package com.example.liveroulette
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
@@ -16,165 +16,112 @@ import android.widget.Toast
 
 class MainActivity : Activity() {
 
-    companion object {
-        private const val REQUEST_OVERLAY = 1001
-        private const val REQUEST_CAPTURE = 1002
-    }
-
-    private lateinit var projectionManager: MediaProjectionManager
-    private lateinit var statusText: TextView
+    private lateinit var status: TextView
+    private val captureRequest = 4102
+    private val overlayRequest = 4101
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        projectionManager =
-            getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-
-        val layout = LinearLayout(this).apply {
+        val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(28, 28, 28, 28)
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(28, 32, 28, 32)
+            setBackgroundColor(0xFF101820.toInt())
         }
 
-        val title = TextView(this).apply {
-            text = "LIVE ROULETTE AI"
-            textSize = 25f
-            gravity = Gravity.CENTER
-            setPadding(10, 20, 10, 25)
-        }
-
-        statusText = TextView(this).apply {
-            text = "Status: STOPPED"
-            textSize = 18f
-            gravity = Gravity.CENTER
-            setPadding(10, 20, 10, 20)
-        }
-
-        val startButton = Button(this).apply {
-            text = "START SCREEN CAPTURE"
-            setOnClickListener {
-                startCapture()
+        fun label(value: String, size: Float, color: Int = 0xFFFFFFFF.toInt()) =
+            TextView(this).apply {
+                text = value
+                textSize = size
+                setTextColor(color)
+                setPadding(4, 12, 4, 12)
             }
-        }
 
-        val stopButton = Button(this).apply {
-            text = "STOP SERVICE"
+        root.addView(label("IMMERSIVE ROULETTE AI", 23f))
+        status = label("STATUS: READY", 16f, 0xFF70E090.toInt())
+        root.addView(status)
+
+        root.addView(Button(this).apply {
+            text = "1. ALLOW FLOATING PANEL"
             setOnClickListener {
-                stopService(
-                    Intent(this@MainActivity, CaptureService::class.java)
-                )
-                statusText.text = "Status: STOPPED"
-                Toast.makeText(
-                    this@MainActivity,
-                    "Capture stopped",
-                    Toast.LENGTH_SHORT
-                ).show()
+                if (Settings.canDrawOverlays(this@MainActivity)) {
+                    Toast.makeText(this@MainActivity, "Permission already allowed", Toast.LENGTH_SHORT).show()
+                } else {
+                    val permissionIntent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                    startActivityForResult(permissionIntent, overlayRequest)
+                }
             }
-        }
+        })
 
-        layout.addView(title)
-        layout.addView(statusText)
-        layout.addView(startButton)
-        layout.addView(stopButton)
+        root.addView(Button(this).apply {
+            text = "2. START SCREEN READING"
+            setOnClickListener {
+                if (!Settings.canDrawOverlays(this@MainActivity)) {
+                    status.text = "Allow floating panel permission first"
+                    return@setOnClickListener
+                }
+                val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                startActivityForResult(manager.createScreenCaptureIntent(), captureRequest)
+            }
+        })
 
-        setContentView(layout)
+        root.addView(Button(this).apply {
+            text = "STOP DETECTION"
+            setOnClickListener {
+                stopService(Intent(this@MainActivity, CaptureService::class.java))
+                status.text = "STATUS: STOPPED"
+            }
+        })
+
+        root.addView(label(
+            "Turn STAR ON only when the roulette table is visible. STAR OFF pauses OCR.",
+            13f, 0xFFB8C7D1.toInt()
+        ))
+        root.addView(label(
+            "Roulette is random. Statistical guesses are not guaranteed.",
+            12f, 0xFFFFD18A.toInt()
+        ))
+
+        setContentView(root)
     }
 
-    private fun startCapture() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-            !Settings.canDrawOverlays(this)
-        ) {
-            statusText.text = "Allow overlay permission first"
+    @Deprecated("Uses the activity result API for compatibility with the supplied project")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
 
-            val intent = Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName")
-            )
-
-            startActivityForResult(intent, REQUEST_OVERLAY)
+        if (requestCode == overlayRequest) {
+            status.text = if (Settings.canDrawOverlays(this)) {
+                "STATUS: FLOATING PANEL ALLOWED"
+            } else {
+                "STATUS: OVERLAY PERMISSION NEEDED"
+            }
             return
         }
 
-        try {
-            startActivityForResult(
-                projectionManager.createScreenCaptureIntent(),
-                REQUEST_CAPTURE
-            )
-        } catch (e: Exception) {
-            statusText.text = "Screen capture permission error"
-            Toast.makeText(
-                this,
-                e.message ?: "Unable to request screen capture",
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
-
-    @Deprecated("Using activity result for compatibility")
-    override fun onActivityResult(
-        requestCode: Int,
-        resultCode: Int,
-        data: Intent?
-    ) {
-        super.onActivityResult(requestCode, resultCode, data)
-
-        when (requestCode) {
-
-            REQUEST_OVERLAY -> {
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
-                    Settings.canDrawOverlays(this)
-                ) {
-                    statusText.text = "Overlay allowed. Tap START again."
-                } else {
-                    statusText.text = "Overlay permission denied"
+        if (requestCode == captureRequest) {
+            if (resultCode == RESULT_OK && data != null) {
+                val serviceIntent = Intent(this, CaptureService::class.java).apply {
+                    putExtra(CaptureService.EXTRA_RESULT_CODE, resultCode)
+                    putExtra(CaptureService.EXTRA_RESULT_DATA, data)
                 }
-            }
 
-            REQUEST_CAPTURE -> {
-                if (resultCode == RESULT_OK && data != null) {
-                    startCaptureService(resultCode, data)
-                } else {
-                    statusText.text = "Screen capture cancelled"
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(serviceIntent)
+                    } else {
+                        startService(serviceIntent)
+                    }
+                    status.text = "STATUS: SCREEN READING STARTED"
+                } catch (e: Exception) {
+                    status.text = "Could not start screen reader: ${e.javaClass.simpleName}"
                 }
-            }
-        }
-    }
-
-    private fun startCaptureService(
-        resultCode: Int,
-        data: Intent
-    ) {
-        val serviceIntent = Intent(
-            this,
-            CaptureService::class.java
-        ).apply {
-            putExtra(CaptureService.EXTRA_RESULT_CODE, resultCode)
-            putExtra(CaptureService.EXTRA_RESULT_DATA, data)
-        }
-
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(serviceIntent)
             } else {
-                startService(serviceIntent)
+                status.text = "SCREEN CAPTURE PERMISSION NOT GRANTED"
             }
-
-            statusText.text = "Status: SERVICE STARTED"
-
-            Toast.makeText(
-                this,
-                "Screen capture started",
-                Toast.LENGTH_SHORT
-            ).show()
-
-        } catch (e: Exception) {
-            statusText.text = "Service could not start"
-
-            Toast.makeText(
-                this,
-                e.message ?: "Service error",
-                Toast.LENGTH_LONG
-            ).show()
         }
     }
 }
