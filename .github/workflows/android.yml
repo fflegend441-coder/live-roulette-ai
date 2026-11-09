@@ -36,10 +36,11 @@ jobs:
 
       - name: Extract Android Project
         run: |
-          test -f ImmersiveRouletteAI.zip
+        
           mkdir -p extracted
           unzip -q ImmersiveRouletteAI.zip -d extracted
-          PROJECT_DIR="$(dirname "$(find extracted -name settings.gradle -o -name settings.gradle.kts | head -n 1)")"
+          PROJECT_DIR="extracted/ImmersiveRouletteAI"
+          test -f "$PROJECT_DIR/settings.gradle"
           test -f "$PROJECT_DIR/app/build.gradle"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
