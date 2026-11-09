@@ -34,15 +34,16 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Extract Android Project
+            - name: Extract Android Project
         run: |
-        
           mkdir -p extracted
-          unzip -q ImmersiveRouletteAI.zip -d extracted
+          ZIP_FILE="$(find . -name 'ImmersiveRouletteAI.zip' -print -quit)"
+          test -n "$ZIP_FILE"
+          unzip -q "$ZIP_FILE" -d extracted
           PROJECT_DIR="extracted/ImmersiveRouletteAI"
           test -f "$PROJECT_DIR/settings.gradle"
           test -f "$PROJECT_DIR/app/build.gradle"
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"T_DIR
 
       - name: Build Debug APK
         run: |
